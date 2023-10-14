@@ -1,8 +1,8 @@
-# Real Time Face Recognition App using TfLite
+# Real Time Face Recognition ATM App using TfLite
 
 A minimalistic Face Recognition module which can be easily incorporated in any Android project.
 
-## [Playstore Link](https://play.google.com/store/apps/details?id=com.atharvakale.facerecognition)
+
 
 ## Key Features 
 - Fast and very accurate.
@@ -17,9 +17,6 @@ A minimalistic Face Recognition module which can be easily incorporated in any A
 - ML Kit
 - TensorFlow Lite
 
-## Model 
-- MobileFaceNet : [Research Paper](https://arxiv.org/ftp/arxiv/papers/1804/1804.07573.pdf)
-- [Implementation](https://github.com/sirius-ai/MobileFaceNet_TF)
 
 ## Installation
 
@@ -28,7 +25,6 @@ Use Import from Version Control in Android Studio or Clone repo and open the pro
 ```bash
 git clone https://github.com/atharvakale31/Face_Recognition_Android.git
 ```
-### Application file : [Face_Recognition.apk](https://drive.google.com/file/d/1ggOo4acHOodrdCP2MkfUv4DJlL_VDZH4/view?usp=sharing)
 
 ## Usage
 <table>
