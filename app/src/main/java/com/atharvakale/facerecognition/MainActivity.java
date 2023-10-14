@@ -54,6 +54,7 @@ import androidx.camera.view.PreviewView;
 import androidx.core.content.ContextCompat;
 import androidx.lifecycle.LifecycleOwner;
 
+import android.os.Handler;
 import android.os.ParcelFileDescriptor;
 import android.text.InputType;
 import android.util.Pair;
@@ -87,6 +88,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity {
+
     FaceDetector detector;
 
     private ListenableFuture<ProcessCameraProvider> cameraProviderFuture;
@@ -114,9 +116,17 @@ public class MainActivity extends AppCompatActivity {
     ProcessCameraProvider cameraProvider;
     private static final int MY_CAMERA_REQUEST_CODE = 100;
 
+
+
+
+
     String modelFile="mobile_face_net.tflite"; //model name
 
+    Intent intent = new Intent(MainActivity.this, DashBoard.class);
+
     private HashMap<String, SimilarityClassifier.Recognition> registered = new HashMap<>(); //saved Faces
+
+
     @RequiresApi(api = Build.VERSION_CODES.M)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -144,6 +154,7 @@ public class MainActivity extends AppCompatActivity {
             requestPermissions(new String[]{Manifest.permission.CAMERA}, MY_CAMERA_REQUEST_CODE);
         }
         //On-screen Action Button
+
         actions.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -276,6 +287,8 @@ public class MainActivity extends AppCompatActivity {
 
 
     }
+
+
     private void testHyperparameter()
     {
 
@@ -330,13 +343,17 @@ public class MainActivity extends AppCompatActivity {
 
             start=false;
             AlertDialog.Builder builder = new AlertDialog.Builder(context);
-            builder.setTitle("Enter Name");
+            builder.setTitle("Enter Name and Account no");
 
                 // Set up the input
-            final EditText input = new EditText(context);
+            final EditText input1 = new EditText(context);
 
-            input.setInputType(InputType.TYPE_CLASS_TEXT );
-            builder.setView(input);
+
+            input1.setInputType(InputType.TYPE_CLASS_TEXT );
+            builder.setView(input1);
+
+
+
 
                 // Set up the buttons
             builder.setPositiveButton("ADD", new DialogInterface.OnClickListener() {
@@ -349,7 +366,7 @@ public class MainActivity extends AppCompatActivity {
                             "0", "", -1f);
                     result.setExtra(embeedings);
 
-                    registered.put( input.getText().toString(),result);
+                    registered.put( input1.getText().toString(),result);
                     start=true;
 
                 }
@@ -673,90 +690,120 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
+
+
+
+
     public void recognizeImage(final Bitmap bitmap) {
+        if (!globalVariables.getInstance().getGlobalVariable()) {
+            // Existing recognition code
 
-        // set Face to Preview
-        face_preview.setImageBitmap(bitmap);
+            // set Face to Preview
+            face_preview.setImageBitmap(bitmap);
 
-        //Create ByteBuffer to store normalized image
+            //Create ByteBuffer to store normalized image
 
-        ByteBuffer imgData = ByteBuffer.allocateDirect(1 * inputSize * inputSize * 3 * 4);
+            ByteBuffer imgData = ByteBuffer.allocateDirect(1 * inputSize * inputSize * 3 * 4);
 
-        imgData.order(ByteOrder.nativeOrder());
+            imgData.order(ByteOrder.nativeOrder());
 
-        intValues = new int[inputSize * inputSize];
+            intValues = new int[inputSize * inputSize];
 
-        //get pixel values from Bitmap to normalize
-        bitmap.getPixels(intValues, 0, bitmap.getWidth(), 0, 0, bitmap.getWidth(), bitmap.getHeight());
+            //get pixel values from Bitmap to normalize
+            bitmap.getPixels(intValues, 0, bitmap.getWidth(), 0, 0, bitmap.getWidth(), bitmap.getHeight());
 
-        imgData.rewind();
+            imgData.rewind();
 
-        for (int i = 0; i < inputSize; ++i) {
-            for (int j = 0; j < inputSize; ++j) {
-                int pixelValue = intValues[i * inputSize + j];
-                if (isModelQuantized) {
-                    // Quantized model
-                    imgData.put((byte) ((pixelValue >> 16) & 0xFF));
-                    imgData.put((byte) ((pixelValue >> 8) & 0xFF));
-                    imgData.put((byte) (pixelValue & 0xFF));
-                } else { // Float model
-                    imgData.putFloat((((pixelValue >> 16) & 0xFF) - IMAGE_MEAN) / IMAGE_STD);
-                    imgData.putFloat((((pixelValue >> 8) & 0xFF) - IMAGE_MEAN) / IMAGE_STD);
-                    imgData.putFloat(((pixelValue & 0xFF) - IMAGE_MEAN) / IMAGE_STD);
+            for (int i = 0; i < inputSize; ++i) {
+                for (int j = 0; j < inputSize; ++j) {
+                    int pixelValue = intValues[i * inputSize + j];
+                    if (isModelQuantized) {
+                        // Quantized model
+                        imgData.put((byte) ((pixelValue >> 16) & 0xFF));
+                        imgData.put((byte) ((pixelValue >> 8) & 0xFF));
+                        imgData.put((byte) (pixelValue & 0xFF));
+                    } else { // Float model
+                        imgData.putFloat((((pixelValue >> 16) & 0xFF) - IMAGE_MEAN) / IMAGE_STD);
+                        imgData.putFloat((((pixelValue >> 8) & 0xFF) - IMAGE_MEAN) / IMAGE_STD);
+                        imgData.putFloat(((pixelValue & 0xFF) - IMAGE_MEAN) / IMAGE_STD);
+
+                    }
+                }
+            }
+            //imgData is input to our model
+            Object[] inputArray = {imgData};
+
+            Map<Integer, Object> outputMap = new HashMap<>();
+
+
+            embeedings = new float[1][OUTPUT_SIZE]; //output of model will be stored in this variable
+
+            outputMap.put(0, embeedings);
+
+            tfLite.runForMultipleInputsOutputs(inputArray, outputMap); //Run model
+
+
+            float distance_local = Float.MAX_VALUE;
+            String id = "0";
+            String label = "?";
+
+            //Compare new face with saved Faces.
+            if (!globalVariables.getInstance().getGlobalVariable() && registered.size() > 0) {
+
+                final List<Pair<String, Float>> nearest = findNearest(embeedings[0]);//Find 2 closest matching face
+
+                if (nearest.get(0) != null) {
+
+                    final String name = nearest.get(0).first;
+                    String[] n = name.split(",");
+                    //get name and distance of closest matching face
+                    // label = name;
+                    distance_local = nearest.get(0).second;
+                    if (developerMode) {
+                        if (distance_local < distance) //If distance between Closest found face is more than 1.000 ,then output UNKNOWN face.
+                            reco_name.setText("Nearest: " + name + "\nDist: " + String.format("%.3f", distance_local) + "\n2nd Nearest: " + nearest.get(1).first + "\nDist: " + String.format("%.3f", nearest.get(1).second));
+                        else
+                            reco_name.setText("Unknown " + "\nDist: " + String.format("%.3f", distance_local) + "\nNearest: " + name + "\nDist: " + String.format("%.3f", distance_local) + "\n2nd Nearest: " + nearest.get(1).first + "\nDist: " + String.format("%.3f", nearest.get(1).second));
+
+//                    System.out.println("nearest: " + name + " - distance: " + distance_local);
+                    } else {
+                        if (distance_local < distance) //If distance between Closest found face is more than 1.000 ,then output UNKNOWN face.
+                        {
+                            reco_name.setText(n[1]);
+
+                            Handler handler = new Handler();
+
+                            // Delay the code execution by 3000 milliseconds (3 seconds)
+                            handler.postDelayed(new Runnable() {
+                                @Override
+                                public void run() {
+                                    // The code you want to run after 3 seconds
+                                    // Put your code here
+                                    Intent intent = new Intent(MainActivity.this, DashBoard.class);
+
+                                    // Add values to the Intent using putExtra()
+
+
+                                    intent.putExtra("name", n[1]);
+                                    intent.putExtra("account", n[0]);
+                                    startActivity(intent);
+
+                                }
+                            }, 1000);
+
+                            Toast.makeText(getApplicationContext(), "account: " + n[0] + " name: " + n[1] + "", Toast.LENGTH_LONG).show();
+                             globalVariables.getInstance().setGlobalVariable(true);
+
+
+                        } else
+                            reco_name.setText("Unknown");
+//                    System.out.println("nearest: " + name + " - distance: " + distance_local);
+                    }
+
 
                 }
             }
         }
-        //imgData is input to our model
-        Object[] inputArray = {imgData};
-
-        Map<Integer, Object> outputMap = new HashMap<>();
-
-
-        embeedings = new float[1][OUTPUT_SIZE]; //output of model will be stored in this variable
-
-        outputMap.put(0, embeedings);
-
-        tfLite.runForMultipleInputsOutputs(inputArray, outputMap); //Run model
-
-
-
-        float distance_local = Float.MAX_VALUE;
-        String id = "0";
-        String label = "?";
-
-        //Compare new face with saved Faces.
-        if (registered.size() > 0) {
-
-            final List<Pair<String, Float>> nearest = findNearest(embeedings[0]);//Find 2 closest matching face
-
-            if (nearest.get(0) != null) {
-
-                final String name = nearest.get(0).first; //get name and distance of closest matching face
-               // label = name;
-                distance_local = nearest.get(0).second;
-                if (developerMode)
-                {
-                    if(distance_local<distance) //If distance between Closest found face is more than 1.000 ,then output UNKNOWN face.
-                        reco_name.setText("Nearest: "+name +"\nDist: "+ String.format("%.3f",distance_local)+"\n2nd Nearest: "+nearest.get(1).first +"\nDist: "+ String.format("%.3f",nearest.get(1).second));
-                    else
-                        reco_name.setText("Unknown "+"\nDist: "+String.format("%.3f",distance_local)+"\nNearest: "+name +"\nDist: "+ String.format("%.3f",distance_local)+"\n2nd Nearest: "+nearest.get(1).first +"\nDist: "+ String.format("%.3f",nearest.get(1).second));
-
-//                    System.out.println("nearest: " + name + " - distance: " + distance_local);
-                }
-                else
-                {
-                    if(distance_local<distance) //If distance between Closest found face is more than 1.000 ,then output UNKNOWN face.
-                        reco_name.setText(name);
-                    else
-                        reco_name.setText("Unknown");
-//                    System.out.println("nearest: " + name + " - distance: " + distance_local);
-                }
-
-
-
-                }
-            }
 
 
 //            final int numDetectionsOutput = 1;
@@ -1014,11 +1061,13 @@ public class MainActivity extends AppCompatActivity {
     }
 
     //Similar Analyzing Procedure
+
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (resultCode == RESULT_OK) {
             if (requestCode == SELECT_PICTURE) {
                 Uri selectedImageUri = data.getData();
+
                 try {
                     InputImage impphoto=InputImage.fromBitmap(getBitmapFromUri(selectedImageUri),0);
                     detector.process(impphoto).addOnSuccessListener(new OnSuccessListener<List<Face>>() {
@@ -1081,6 +1130,11 @@ public class MainActivity extends AppCompatActivity {
 
             }
         }
+
+
+
+
+
     }
 
     private Bitmap getBitmapFromUri(Uri uri) throws IOException {
